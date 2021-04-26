@@ -8,6 +8,13 @@
 #   and http://wiki.openssl.org/index.php/Android
 
 #####################################################################
+# 该脚本弃用，直接使用项目中的NOTES.ANDROID文本中描述的方式，这里只作记录 ------------------------------------------
+# export ANDROID_NDK_HOME=/home/yuri/AndroidSDK/ndk/21.1.6352462
+# PATH=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$ANDROID_NDK_HOME/toolchains/arm-linux-androideabi-4.9/prebuilt/linux-x86_64/bin:$PATH
+# ./Configure android-arm64 -D__ANDROID_API__=26 --prefix=/home/yuri/WorkSpace/OpenSSL/out-arm
+# make & make install
+####################################################################
+
 
 # Set ANDROID_NDK_ROOT to you NDK location. For example,
 # /opt/android-ndk-r8e or /opt/android-ndk-r9. This can be done in a
