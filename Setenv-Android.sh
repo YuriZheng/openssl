@@ -7,234 +7,187 @@
 # See http://wiki.openssl.org/index.php/FIPS_Library_and_Android
 #   and http://wiki.openssl.org/index.php/Android
 
+
+EXIT_CODE_SUCCESS=1
+EXIT_CODE_ERROR_PARAM=-1
+
+PLATFORM_ARMEABI="armeabi-v7a"
+PLATFORM_ARM64="arm64-v8a"
+PLATFORM_86="x86"
+PLATFORM_86_64="x86-64"
+
+_ndk_root=$ANDROID_NDK_ROOT
+_platform=$PLATFORM_ARM64
+_toolchain=linux-x86_64
+_api=26
+
+LD_LIBRARY_PATH=$(pwd)
+_out=${LD_LIBRARY_PATH}/out-$_platform
+
+if [ $# -gt 0 ]; then
+  if [ $1 = "--help" ] || [ $1 = "-h" ]; then
+    echo """
+  Options:
+
+    --ndk-home  :   设置Android ndk的根目录
+
+    --platform  :   设置编译的平台类型
+                     $PLATFORM_ARMEABI
+                     $PLATFORM_ARM64
+                     $PLATFORM_86
+                     $PLATFORM_86_64
+
+    --toolchain :   交叉编译工具目录，根据平台不同得到的，在NDK中的toolchains目录下的llvm/prebuilt，比如:
+                     darwin-x86_64
+                     linux-x86_64
+
+    --api       :   设置编译的目标API
+
+    --out       :   设置编译之后安装的输出目录
+    """
+    exit $EXIT_CODE_SUCCESS
+  fi
+fi
+
+# 解析参数
+for i in "$@"; do
+    if [[ $i == --ndk-home* ]]; then
+      _ndk_root=${i#*=}
+      _ndk_root=${_ndk_root}
+    elif [[ $i == --platform* ]]; then
+      _platform=${i#*=}
+      _platform=${_platform}
+    elif [[ $i == --api* ]]; then
+      _api=${i#*=}
+      _api=${_api}
+    elif [[ $i == --toolchain* ]]; then
+      _toolchain=${i#*=}
+      _toolchain=${_toolchain}
+    elif [[ $i == --out* ]]; then
+      _out=${i#*=}
+      _out=${_out}
+    else
+      echo "未知参数: $i, Ignore"
+    fi
+done
+
+# 判断参数有效性
+checking_ret=1
+if [ -z $_ndk_root ] || [ ! -d $_ndk_root ]; then
+  echo "NDK目录无效，查看帮组 -h"
+  checking_ret=0
+fi
+if [ -z $_toolchain ] || [ ! -d "$_ndk_root/toolchains/llvm/prebuilt/$_toolchain" ]; then
+  echo "交叉编译工具设置无效，查看帮组 -h"
+  checking_ret=0
+fi
+if [ -z $_platform ] || ([ $_platform != $PLATFORM_ARMEABI ] \
+    && [ $_platform != $PLATFORM_ARM64 ] \
+    && [ $_platform != $PLATFORM_86 ] \
+    && [ $_platform != $PLATFORM_86_64 ]); then
+  echo "平台设置错误，查看帮助 -h"
+  checking_ret=0
+fi
+if [ -z $_api ] || [ $_api -lt "26" ]; then
+  echo "最小api为26，查看帮组 -h"
+  checking_ret=0
+fi
+if [ -z $_out ] || [ -z $_out ]; then
+  echo "输出目录无效，查看帮组 -h"
+  checking_ret=0
+else
+  mkdir -p $_out
+  if [ ! -d $_out ]; then
+    echo "输出目录无效，查看帮组 -h"
+    checking_ret=0
+  fi
+fi
+
+tool_platform=""
+if [ $_platform == $PLATFORM_ARMEABI ]; then
+  tool_platform=arm-linux-androideabi-4.9
+elif [ $_platform == $PLATFORM_ARM64 ]; then
+  tool_platform=aarch64-linux-android-4.9
+elif [ $_platform == $PLATFORM_86 ]; then
+  tool_platform=x86-4.9
+elif [ $_platform == $PLATFORM_86_64 ]; then
+  tool_platform=x86_64-4.9
+fi
+
+tool_path=$_ndk_root/toolchains/$tool_platform/prebuilt/$_toolchain/bin
+llvm_tool_path=$_ndk_root/toolchains/llvm/prebuilt/$_toolchain/bin
+if [ ! -d $tool_path ]; then
+  echo "目录不存在，请检测NDK版本，需21及以上版本: $tool_path"
+  checking_ret=0
+fi
+if [ ! -d $llvm_tool_path ]; then
+  echo "目录不存在，请检测NDK版本，需21及以上版本: $llvm_tool_path"
+  checking_ret=0
+fi
+
+if [ $checking_ret != 1 ]; then
+  exit $EXIT_CODE_ERROR_PARAM
+fi
+
+echo """
+设置成功：
+NDK root       :$_ndk_root
+Tool path      :$tool_path
+               :$llvm_tool_path
+Toolchain      :$_toolchain
+Platform       :$_platform
+Android api    :$_api
+Build out      :$_out
+"""
+
+# 在Google官网中有定义编译选项：https://developer.android.com/ndk/guides/other_build_systems
+# 克隆下来文件：git clone https://github.com/glennrp/libpng -b v1.6.37
+# cd libpng
+# export TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/depending on your build machine...
+# export TARGET=aarch64-linux-android（depending on your device...）
+# export API=21
+# export AR=$TOOLCHAIN/bin/llvm-ar
+# export CC=$TOOLCHAIN/bin/$TARGET$API-clang
+# export AS=$CC
+# export CXX=$TOOLCHAIN/bin/$TARGET$API-clang++
+# export LD=$TOOLCHAIN/bin/ld
+# export RANLIB=$TOOLCHAIN/bin/llvm-ranlib
+# export STRIP=$TOOLCHAIN/bin/llvm-strip
+# ./configure --host $TARGET
+# make
+
 #####################################################################
-# 该脚本弃用，直接使用项目中的NOTES.ANDROID文本中描述的方式，这里只作记录 ------------------------------------------
 # export ANDROID_NDK_HOME=/home/yuri/AndroidSDK/ndk/21.1.6352462
-# PATH=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$ANDROID_NDK_HOME/toolchains/arm-linux-androideabi-4.9/prebuilt/linux-x86_64/bin:$PATH
+# PATH=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:
+#      $ANDROID_NDK_HOME/toolchains/arm-linux-androideabi-4.9/prebuilt/linux-x86_64/bin:
+#      $PATH
 # ./Configure android-arm64 -D__ANDROID_API__=26 --prefix=/home/yuri/WorkSpace/OpenSSL/out-arm
 # make & make install
 ####################################################################
 
-
-# Set ANDROID_NDK_ROOT to you NDK location. For example,
-# /opt/android-ndk-r8e or /opt/android-ndk-r9. This can be done in a
-# login script. If ANDROID_NDK_ROOT is not specified, the script will
-# try to pick it up with the value of _ANDROID_NDK_ROOT below. If
-# ANDROID_NDK_ROOT is set, then the value is ignored.
-# _ANDROID_NDK="android-ndk-r8e"
-_ANDROID_NDK="android-ndk-r9"
-# _ANDROID_NDK="android-ndk-r10"
-
-# Set _ANDROID_EABI to the EABI you want to use. You can find the
-# list in $ANDROID_NDK_ROOT/toolchains. This value is always used.
-# _ANDROID_EABI="x86-4.6"
-# _ANDROID_EABI="arm-linux-androideabi-4.6"
-_ANDROID_EABI="arm-linux-androideabi-4.8"
-
-# Set _ANDROID_ARCH to the architecture you are building for.
-# This value is always used.
-# _ANDROID_ARCH=arch-x86
-_ANDROID_ARCH=arch-arm
-
-# Set _ANDROID_API to the API you want to use. You should set it
-# to one of: android-14, android-9, android-8, android-14, android-5
-# android-4, or android-3. You can't set it to the latest (for
-# example, API-17) because the NDK does not supply the platform. At
-# Android 5.0, there will likely be another platform added (android-22?).
-# This value is always used.
-# _ANDROID_API="android-14"
-_ANDROID_API="android-18"
-# _ANDROID_API="android-19"
-
-#####################################################################
-
-# If the user did not specify the NDK location, try and pick it up.
-# We expect something like ANDROID_NDK_ROOT=/opt/android-ndk-r8e
-# or ANDROID_NDK_ROOT=/usr/local/android-ndk-r8e.
-
-if [ -z "$ANDROID_NDK_ROOT" ]; then
-
-  _ANDROID_NDK_ROOT=""
-  if [ -z "$_ANDROID_NDK_ROOT" ] && [ -d "/usr/local/$_ANDROID_NDK" ]; then
-    _ANDROID_NDK_ROOT="/usr/local/$_ANDROID_NDK"
-  fi
-
-  if [ -z "$_ANDROID_NDK_ROOT" ] && [ -d "/opt/$_ANDROID_NDK" ]; then
-    _ANDROID_NDK_ROOT="/opt/$_ANDROID_NDK"
-  fi
-
-  if [ -z "$_ANDROID_NDK_ROOT" ] && [ -d "$HOME/$_ANDROID_NDK" ]; then
-    _ANDROID_NDK_ROOT="$HOME/$_ANDROID_NDK"
-  fi
-
-  if [ -z "$_ANDROID_NDK_ROOT" ] && [ -d "$PWD/$_ANDROID_NDK" ]; then
-    _ANDROID_NDK_ROOT="$PWD/$_ANDROID_NDK"
-  fi
-
-  # If a path was set, then export it
-  if [ ! -z "$_ANDROID_NDK_ROOT" ] && [ -d "$_ANDROID_NDK_ROOT" ]; then
-    export ANDROID_NDK_ROOT="$_ANDROID_NDK_ROOT"
-  fi
+cipher=""
+if [ $_platform == $PLATFORM_ARMEABI ]; then
+  cipher=android-arm
+elif [ $_platform == $PLATFORM_ARM64 ]; then
+  cipher=android-arm64
+elif [ $_platform == $PLATFORM_86 ]; then
+  cipher=android-x86
+elif [ $_platform == $PLATFORM_86_64 ]; then
+  cipher=android-x86_64
 fi
 
-# Error checking
-# ANDROID_NDK_ROOT should always be set by the user (even when not running this script)
-# http://groups.google.com/group/android-ndk/browse_thread/thread/a998e139aca71d77
-if [ -z "$ANDROID_NDK_ROOT" ] || [ ! -d "$ANDROID_NDK_ROOT" ]; then
-  echo "Error: ANDROID_NDK_ROOT is not a valid path. Please edit this script."
-  # echo "$ANDROID_NDK_ROOT"
-  # exit 1
-fi
+export ANDROID_NDK_HOME=$_ndk_root
 
-# Error checking
-if [ ! -d "$ANDROID_NDK_ROOT/toolchains" ]; then
-  echo "Error: ANDROID_NDK_ROOT/toolchains is not a valid path. Please edit this script."
-  # echo "$ANDROID_NDK_ROOT/toolchains"
-  # exit 1
-fi
+PATH=$tool_path:$llvm_tool_path:$PATH
 
-# Error checking
-if [ ! -d "$ANDROID_NDK_ROOT/toolchains/$_ANDROID_EABI" ]; then
-  echo "Error: ANDROID_EABI is not a valid path. Please edit this script."
-  # echo "$ANDROID_NDK_ROOT/toolchains/$_ANDROID_EABI"
-  # exit 1
-fi
+echo $PATH
 
-#####################################################################
+echo "./Configure $cipher -D__ANDROID_API__=$_api --prefix=$_out"
 
-# Based on ANDROID_NDK_ROOT, try and pick up the required toolchain. We expect something like:
-# /opt/android-ndk-r83/toolchains/arm-linux-androideabi-4.7/prebuilt/linux-x86_64/bin
-# Once we locate the toolchain, we add it to the PATH. Note: this is the 'hard way' of
-# doing things according to the NDK documentation for Ice Cream Sandwich.
-# https://android.googlesource.com/platform/ndk/+/ics-mr0/docs/STANDALONE-TOOLCHAIN.html
+./Configure $cipher -D__ANDROID_API__=$_api --prefix=$_out
 
-ANDROID_TOOLCHAIN=""
-for host in "linux-x86_64" "linux-x86" "darwin-x86_64" "darwin-x86"
-do
-  if [ -d "$ANDROID_NDK_ROOT/toolchains/$_ANDROID_EABI/prebuilt/$host/bin" ]; then
-    ANDROID_TOOLCHAIN="$ANDROID_NDK_ROOT/toolchains/$_ANDROID_EABI/prebuilt/$host/bin"
-    break
-  fi
-done
+echo "开始编译......"
 
-# Error checking
-if [ -z "$ANDROID_TOOLCHAIN" ] || [ ! -d "$ANDROID_TOOLCHAIN" ]; then
-  echo "Error: ANDROID_TOOLCHAIN is not valid. Please edit this script."
-  # echo "$ANDROID_TOOLCHAIN"
-  # exit 1
-fi
+make clean & make -j4 & make install
 
-case $_ANDROID_ARCH in
-	arch-arm)	  
-      ANDROID_TOOLS="arm-linux-androideabi-gcc arm-linux-androideabi-ranlib arm-linux-androideabi-ld"
-	  ;;
-	arch-x86)	  
-      ANDROID_TOOLS="i686-linux-android-gcc i686-linux-android-ranlib i686-linux-android-ld"
-	  ;;	  
-	*)
-	  echo "ERROR ERROR ERROR"
-	  ;;
-esac
-
-for tool in $ANDROID_TOOLS
-do
-  # Error checking
-  if [ ! -e "$ANDROID_TOOLCHAIN/$tool" ]; then
-    echo "Error: Failed to find $tool. Please edit this script."
-    # echo "$ANDROID_TOOLCHAIN/$tool"
-    # exit 1
-  fi
-done
-
-# Only modify/export PATH if ANDROID_TOOLCHAIN good
-if [ ! -z "$ANDROID_TOOLCHAIN" ]; then
-  export ANDROID_TOOLCHAIN="$ANDROID_TOOLCHAIN"
-  export PATH="$ANDROID_TOOLCHAIN":"$PATH"
-fi
-
-#####################################################################
-
-# For the Android SYSROOT. Can be used on the command line with --sysroot
-# https://android.googlesource.com/platform/ndk/+/ics-mr0/docs/STANDALONE-TOOLCHAIN.html
-export ANDROID_SYSROOT="$ANDROID_NDK_ROOT/platforms/$_ANDROID_API/$_ANDROID_ARCH"
-export CROSS_SYSROOT="$ANDROID_SYSROOT"
-export NDK_SYSROOT="$ANDROID_SYSROOT"
-
-# Error checking
-if [ -z "$ANDROID_SYSROOT" ] || [ ! -d "$ANDROID_SYSROOT" ]; then
-  echo "Error: ANDROID_SYSROOT is not valid. Please edit this script."
-  # echo "$ANDROID_SYSROOT"
-  # exit 1
-fi
-
-#####################################################################
-
-# If the user did not specify the FIPS_SIG location, try and pick it up
-# If the user specified a bad location, then try and pick it up too.
-if [ -z "$FIPS_SIG" ] || [ ! -e "$FIPS_SIG" ]; then
-
-  # Try and locate it
-  _FIPS_SIG=""
-  if [ -d "/usr/local/ssl/$_ANDROID_API" ]; then
-    _FIPS_SIG=`find "/usr/local/ssl/$_ANDROID_API" -name incore`
-  fi
-
-  if [ ! -e "$_FIPS_SIG" ]; then
-    _FIPS_SIG=`find $PWD -name incore`
-  fi
-
-  # If a path was set, then export it
-  if [ ! -z "$_FIPS_SIG" ] && [ -e "$_FIPS_SIG" ]; then
-    export FIPS_SIG="$_FIPS_SIG"
-  fi
-fi
-
-# Error checking. Its OK to ignore this if you are *not* building for FIPS
-if [ -z "$FIPS_SIG" ] || [ ! -e "$FIPS_SIG" ]; then
-  echo "Error: FIPS_SIG does not specify incore module. Please edit this script."
-  # echo "$FIPS_SIG"
-  # exit 1
-fi
-
-#####################################################################
-
-# Most of these should be OK (MACHINE, SYSTEM, ARCH). RELEASE is ignored.
-export MACHINE=armv7
-export RELEASE=2.6.37
-export SYSTEM=android
-export ARCH=arm
-export CROSS_COMPILE="arm-linux-androideabi-"
-
-if [ "$_ANDROID_ARCH" == "arch-x86" ]; then
-	export MACHINE=i686
-	export RELEASE=2.6.37
-	export SYSTEM=android
-	export ARCH=x86
-	export CROSS_COMPILE="i686-linux-android-"
-fi
-
-# For the Android toolchain
-# https://android.googlesource.com/platform/ndk/+/ics-mr0/docs/STANDALONE-TOOLCHAIN.html
-export ANDROID_SYSROOT="$ANDROID_NDK_ROOT/platforms/$_ANDROID_API/$_ANDROID_ARCH"
-export SYSROOT="$ANDROID_SYSROOT"
-export NDK_SYSROOT="$ANDROID_SYSROOT"
-export ANDROID_NDK_SYSROOT="$ANDROID_SYSROOT"
-export ANDROID_API="$_ANDROID_API"
-
-# CROSS_COMPILE and ANDROID_DEV are DFW (Don't Fiddle With). Its used by OpenSSL build system.
-# export CROSS_COMPILE="arm-linux-androideabi-"
-export ANDROID_DEV="$ANDROID_NDK_ROOT/platforms/$_ANDROID_API/$_ANDROID_ARCH/usr"
-export HOSTCC=gcc
-
-VERBOSE=1
-if [ ! -z "$VERBOSE" ] && [ "$VERBOSE" != "0" ]; then
-  echo "ANDROID_NDK_ROOT: $ANDROID_NDK_ROOT"
-  echo "ANDROID_ARCH: $_ANDROID_ARCH"
-  echo "ANDROID_EABI: $_ANDROID_EABI"
-  echo "ANDROID_API: $ANDROID_API"
-  echo "ANDROID_SYSROOT: $ANDROID_SYSROOT"
-  echo "ANDROID_TOOLCHAIN: $ANDROID_TOOLCHAIN"
-  echo "FIPS_SIG: $FIPS_SIG"
-  echo "CROSS_COMPILE: $CROSS_COMPILE"
-  echo "ANDROID_DEV: $ANDROID_DEV"
-fi
+echo "开始完成......"
