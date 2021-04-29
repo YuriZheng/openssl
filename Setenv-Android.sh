@@ -20,31 +20,42 @@ _ndk_root=$ANDROID_NDK_ROOT
 _platform=$PLATFORM_ARM64
 _toolchain=linux-x86_64
 _api=26
+_out=""
 
-LD_LIBRARY_PATH=$(pwd)
-_out=${LD_LIBRARY_PATH}/out-$_platform
+CURRENT_PATH=$(pwd)
+# _out=${LD_LIBRARY_PATH}/out-$_platform
 
 if [ $# -gt 0 ]; then
   if [ $1 = "--help" ] || [ $1 = "-h" ]; then
     echo """
+  Command:
+
+    --help(h)    :查看帮助信息
+
+    --clean(c)   :清除上次编译的文件，但不包含out目录
+
   Options:
 
-    --ndk-home  :   设置Android ndk的根目录
+    --ndk-home   :设置Android ndk的根目录
 
-    --platform  :   设置编译的平台类型
+    --platform   :设置编译的平台类型
                      $PLATFORM_ARMEABI
                      $PLATFORM_ARM64
                      $PLATFORM_86
                      $PLATFORM_86_64
 
-    --toolchain :   交叉编译工具目录，根据平台不同得到的，在NDK中的toolchains目录下的llvm/prebuilt，比如:
+    --toolchain  :交叉编译工具目录，根据平台不同得到的，在NDK中的toolchains目录下的llvm/prebuilt，比如:
                      darwin-x86_64
                      linux-x86_64
 
-    --api       :   设置编译的目标API
+    --api        :设置编译的目标API
 
-    --out       :   设置编译之后安装的输出目录
+    --out        :设置编译之后安装的输出目录
     """
+    exit $EXIT_CODE_SUCCESS
+  fi
+  if [ $1 = "--clean" ] || [ $1 = "-c" ]; then
+    make clean
     exit $EXIT_CODE_SUCCESS
   fi
 fi
@@ -92,14 +103,17 @@ if [ -z $_api ] || [ $_api -lt "26" ]; then
   echo "最小api为26，查看帮组 -h"
   checking_ret=0
 fi
+if [ $checking_ret == 1 ]; then
+  _out=${CURRENT_PATH}/out-$_platform
+fi
 if [ -z $_out ] || [ -z $_out ]; then
-  echo "输出目录无效，查看帮组 -h"
-  checking_ret=0
-else
-  mkdir -p $_out
-  if [ ! -d $_out ]; then
     echo "输出目录无效，查看帮组 -h"
     checking_ret=0
+  else
+    mkdir -p $_out
+    if [ ! -d $_out ]; then
+      echo "输出目录无效，查看帮组 -h"
+      checking_ret=0
   fi
 fi
 
@@ -186,8 +200,6 @@ echo "./Configure $cipher -D__ANDROID_API__=$_api --prefix=$_out"
 
 ./Configure $cipher -D__ANDROID_API__=$_api --prefix=$_out
 
-echo "开始编译......"
+make clean && make -j4 && make install
 
-make clean & make -j4 & make install
-
-echo "开始完成......"
+echo "Build success"
